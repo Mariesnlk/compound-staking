@@ -22,8 +22,11 @@ npx hardhat run scripts/deploy.ts --network goerli
 ```
 
 # Deploy and Verify
-DevUSDC deployed to:  0x0B884EAa34d6025C5e9AD72ABE428C21a75A2E6A
+DevUSDC deployed to:  0x50d7ddbeb73d962a40dd0160f38d27fd93bc6843
 
 Staking deployed to:  0x62927BD311f9173d322416d798168D7a0985f9f4
+
+Successfully verified contract ERC20Dev on Etherscan.
+https://goerli.etherscan.io/address/0x50d7ddbeb73d962a40dd0160f38d27fd93bc6843#code
 
 

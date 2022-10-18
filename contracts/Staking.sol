@@ -12,29 +12,30 @@ import "./mock/interfaces/ICEther.sol";
 /// core stking without fee
 contract Staking is IStaking, Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
-    /// @notice
+    /// @notice constant of minimum ether amount to stake
     uint256 private constant MIN_AMOUNT_TO_STAKE = 5 ether;
-    /// @notice
+    /// @notice constant one day in seconds
     uint256 private constant DAY = 1 days;
-    /// @notice
+    /// @notice constant 365 days in seconds
     uint256 private constant YEAR = 365 days;
-    /// @notice
+    /// @notice annual percantage rate
     uint256 private constant APR = 10; // 10 %
-    /// @notice
+    /// @notice contract to use data feeds from Chainlink
     AggregatorV3Interface public priceFeed;
-    /// @notice
+    /// @notice contract to put staked ETH as collateral in Compound 
     ICEther public immutable CETH_TOKEN;
-    /// @notice
+    /// @notice ERC20 token that claims as rewards
     IERC20 public immutable REWARD_TOKEN;
-    /// @notice
+    /// @notice total amount of staked ETH
     uint256 public totalStakedAmount;
     /// @notice stakeholders info
     mapping(address => Stakeholder) public stakeholders;
 
     /// @notice constructor
-    /// @param _cEtherToken - 
+    /// @param _cEtherToken - contract of cETH contract in Compound 
     /// @param _rewardToken - reward token address
-    /// @param _priceFeed - 
+    /// @param _priceFeed - contract address to connect to off-chain data
+    ///
     /// Network: Goerli
     /// Aggregator: ETH/USD
     /// Address: 0xD4a33860578De61DBAbDc8BFdb98FD742fA7028e
@@ -57,6 +58,8 @@ contract Staking is IStaking, Ownable, ReentrancyGuard {
         _;
     }
 
+    /// @notice staking ETH amount
+    /// @dev every one can stake ETH to the staking pool
     function stake() public payable override nonReentrant {
         require(msg.value >= MIN_AMOUNT_TO_STAKE, "INVALID_AMOUNT");
 
@@ -72,11 +75,15 @@ contract Staking is IStaking, Ownable, ReentrancyGuard {
         stakeholder.stakedAmount += msg.value;
         totalStakedAmount += msg.value;
 
+        // mint some cETH by supplying ETH to the Compound Protocol
         CETH_TOKEN.mint{ value: msg.value, gas: 250000 }();
 
         emit Staked(msg.sender, msg.value);
     }
 
+    /// @notice withdrawing amount of staked ETH
+    /// @dev only stakers can withdraw
+    /// @param amount - ETH amount to withdraw staked ETH
     function withdraw(uint256 amount) external override onlyStaker {
         require(amount > 0 && amount <= stakeholders[msg.sender].stakedAmount, "INVALID_AMOUNT");
 
@@ -85,6 +92,7 @@ contract Staking is IStaking, Ownable, ReentrancyGuard {
         stakeholders[msg.sender].lastUpdatedRewardTime = block.timestamp;
         totalStakedAmount -= amount;
 
+        // exchanging all cETH based on underlying ETH amount
         require(CETH_TOKEN.redeemUnderlying(amount) == 0, "FAILURED");
 
         (bool success, ) = msg.sender.call{ value: amount }("");
@@ -93,6 +101,7 @@ contract Staking is IStaking, Ownable, ReentrancyGuard {
         emit Withdrawn(msg.sender, amount);
     }
 
+    /// @notice claim rewards
     function claimReward() external override {
         uint256 reward = _calculateReward(msg.sender);
 

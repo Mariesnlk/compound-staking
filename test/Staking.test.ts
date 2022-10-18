@@ -50,25 +50,25 @@ describe("Staking", function () {
 
   describe("Deployment", function () {
     it("Should get all addresses", async function () {
-      expect(staking.CETH_TOKEN()).to.be.equal(cEther.address);
-      expect(staking.REWARD_TOKEN()).to.be.equal(eRC20Dev.address);
-      expect(staking.priceFeed()).to.be.equal(aggregationV3.address);
+      expect(await staking.CETH_TOKEN()).to.be.equal(cEther.address);
+      expect(await staking.REWARD_TOKEN()).to.be.equal(eRC20Dev.address);
+      expect(await staking.priceFeed()).to.be.equal(aggregationV3.address);
     });
 
     it("Should fail if cEther address is zero", async function () {
-      const Staking = await ethers.getContractFactory('CoreStaking');
+      const Staking = await ethers.getContractFactory('Staking');
       await expect(Staking.deploy(constants.ZERO_ADDRESS, eRC20Dev.address, aggregationV3.address))
         .to.be.revertedWith("ZERO_ADDRESS");
     });
 
     it("Should fail if eRC20Dev address is zero", async function () {
-      const Staking = await ethers.getContractFactory('CoreStaking');
+      const Staking = await ethers.getContractFactory('Staking');
       await expect(Staking.deploy( cEther.address, constants.ZERO_ADDRESS, aggregationV3.address))
         .to.be.revertedWith("ZERO_ADDRESS");
     });
 
     it("Should fail if aggregationV3 address is zero", async function () {
-      const Staking = await ethers.getContractFactory('CoreStaking');
+      const Staking = await ethers.getContractFactory('Staking');
       await expect(Staking.deploy( cEther.address, eRC20Dev.address, constants.ZERO_ADDRESS))
         .to.be.revertedWith("ZERO_ADDRESS");
     });

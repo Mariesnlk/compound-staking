@@ -21,7 +21,7 @@ contract Staking is IStaking, ReentrancyGuard {
     uint256 private constant APR = 10; // 10 %
     /// @notice contract to use data feeds from Chainlink
     AggregatorV3Interface public priceFeed;
-    /// @notice contract to put staked ETH as collateral in Compound 
+    /// @notice contract to put staked ETH as collateral in Compound
     ICEther public immutable CETH_TOKEN;
     /// @notice ERC20 token that claims as rewards
     IERC20 public immutable REWARD_TOKEN;
@@ -31,14 +31,18 @@ contract Staking is IStaking, ReentrancyGuard {
     mapping(address => Stakeholder) public stakeholders;
 
     /// @notice constructor
-    /// @param _cEtherToken - contract of cETH contract in Compound 
+    /// @param _cEtherToken - contract of cETH contract in Compound
     /// @param _rewardToken - reward token address
     /// @param _priceFeed - contract address to connect to off-chain data
     ///
     /// Network: Goerli
     /// Aggregator: ETH/USD
     /// Address: 0xD4a33860578De61DBAbDc8BFdb98FD742fA7028e
-    constructor(address payable _cEtherToken, address _rewardToken, address _priceFeed) {
+    constructor(
+        address payable _cEtherToken,
+        address _rewardToken,
+        address _priceFeed
+    ) {
         require(_cEtherToken != address(0), "ZERO_ADDRESS");
         require(_rewardToken != address(0), "ZERO_ADDRESS");
         require(_priceFeed != address(0), "ZERO_ADDRESS");
@@ -75,7 +79,7 @@ contract Staking is IStaking, ReentrancyGuard {
         totalStakedAmount += msg.value;
 
         // mint some cETH by supplying ETH to the Compound Protocol
-        CETH_TOKEN.mint{ value: msg.value, gas: 250000 }();
+        CETH_TOKEN.mint{value: msg.value, gas: 250000}();
 
         emit Staked(msg.sender, msg.value);
     }
@@ -84,9 +88,14 @@ contract Staking is IStaking, ReentrancyGuard {
     /// @dev only stakers can withdraw
     /// @param amount - ETH amount to withdraw staked ETH
     function withdraw(uint256 amount) external override onlyStaker {
-        require(amount > 0 && amount <= stakeholders[msg.sender].stakedAmount, "INVALID_AMOUNT");
+        require(
+            amount > 0 && amount <= stakeholders[msg.sender].stakedAmount,
+            "INVALID_AMOUNT"
+        );
 
-        stakeholders[msg.sender].uclaimedRewards += _calculateReward(msg.sender);
+        stakeholders[msg.sender].uclaimedRewards += _calculateReward(
+            msg.sender
+        );
         stakeholders[msg.sender].stakedAmount -= amount;
         stakeholders[msg.sender].lastUpdatedRewardTime = block.timestamp;
         totalStakedAmount -= amount;
@@ -94,7 +103,7 @@ contract Staking is IStaking, ReentrancyGuard {
         // exchanging all cETH based on underlying ETH amount
         require(CETH_TOKEN.redeemUnderlying(amount) == 0, "FAILURED");
 
-        (bool success, ) = msg.sender.call{ value: amount }("");
+        (bool success, ) = msg.sender.call{value: amount}("");
         require(success, "INVALID_TRANSFER");
 
         emit Withdrawn(msg.sender, amount);
@@ -104,18 +113,29 @@ contract Staking is IStaking, ReentrancyGuard {
     function claimReward() external override {
         uint256 reward = _calculateReward(msg.sender);
 
-        stakeholders[msg.sender].uclaimedRewards = 0;
-        stakeholders[msg.sender].lastUpdatedRewardTime = block.timestamp;
-
         (, int256 price, , , ) = priceFeed.latestRoundData();
 
-        REWARD_TOKEN.transferFrom(owner(), msg.sender, reward * uint256(price));
-
+        if (stakeholders[msg.sender].uclaimedRewards > 0)
+            REWARD_TOKEN.transferFrom(
+                address(this),
+                msg.sender,
+                reward * uint256(price)
+            );
+        stakeholders[msg.sender].uclaimedRewards = 0;
+        stakeholders[msg.sender].lastUpdatedRewardTime = block.timestamp;
+        
         emit RewardClaimed(msg.sender, reward);
     }
 
-    function _calculateReward(address _account) internal view returns (uint256) {
-        return (((stakeholders[_account].stakedAmount * APR) / 100) / YEAR) * ((block.timestamp - stakeholders[_account].lastUpdatedRewardTime) / DAY);
+    function _calculateReward(address _account)
+        internal
+        view
+        returns (uint256)
+    {
+        return
+            (((stakeholders[_account].stakedAmount * APR) / 100) / YEAR) *
+            ((block.timestamp - stakeholders[_account].lastUpdatedRewardTime) /
+                DAY);
     }
 
     receive() external payable {

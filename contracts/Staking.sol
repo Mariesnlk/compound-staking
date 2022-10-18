@@ -3,14 +3,13 @@ pragma solidity 0.8.17;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 import "./interfaces/IStaking.sol";
 import "./mock/interfaces/ICEther.sol";
 
 /// core stking without fee
-contract Staking is IStaking, Ownable, ReentrancyGuard {
+contract Staking is IStaking, ReentrancyGuard {
     using SafeERC20 for IERC20;
     /// @notice constant of minimum ether amount to stake
     uint256 private constant MIN_AMOUNT_TO_STAKE = 5 ether;

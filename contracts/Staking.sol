@@ -8,7 +8,6 @@ import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 import "./interfaces/IStaking.sol";
 import "./mock/interfaces/ICEther.sol";
 
-/// core stking without fee
 contract Staking is IStaking, ReentrancyGuard {
     using SafeERC20 for IERC20;
     /// @notice constant of minimum ether amount to stake
@@ -43,9 +42,11 @@ contract Staking is IStaking, ReentrancyGuard {
         address _rewardToken,
         address _priceFeed
     ) {
-        require(_cEtherToken != address(0), "ZERO_ADDRESS");
-        require(_rewardToken != address(0), "ZERO_ADDRESS");
-        require(_priceFeed != address(0), "ZERO_ADDRESS");
+        if (
+            _cEtherToken == address(0) ||
+            _rewardToken == address(0) ||
+            _priceFeed == address(0)
+        ) revert ZeroAddress();
 
         CETH_TOKEN = ICEther(_cEtherToken);
         REWARD_TOKEN = IERC20(_rewardToken);
@@ -64,7 +65,7 @@ contract Staking is IStaking, ReentrancyGuard {
     /// @notice staking ETH amount
     /// @dev every one can stake ETH to the staking pool
     function stake() public payable override nonReentrant {
-        require(msg.value >= MIN_AMOUNT_TO_STAKE, "INVALID_AMOUNT");
+        if (msg.value < MIN_AMOUNT_TO_STAKE) revert LessThanValidAmount();
 
         Stakeholder storage stakeholder = stakeholders[msg.sender];
 
@@ -74,7 +75,7 @@ contract Staking is IStaking, ReentrancyGuard {
             stakeholder.isStaked = true;
         }
 
-        stakeholders[msg.sender].lastUpdatedRewardTime = block.timestamp;
+        stakeholder.lastUpdatedRewardTime = block.timestamp;
         stakeholder.stakedAmount += msg.value;
         totalStakedAmount += msg.value;
 
@@ -88,10 +89,8 @@ contract Staking is IStaking, ReentrancyGuard {
     /// @dev only stakers can withdraw
     /// @param amount - ETH amount to withdraw staked ETH
     function withdraw(uint256 amount) external override onlyStaker {
-        require(
-            amount > 0 && amount <= stakeholders[msg.sender].stakedAmount,
-            "INVALID_AMOUNT"
-        );
+        if (amount <= 0 && amount > stakeholders[msg.sender].stakedAmount)
+            revert InvalidWithdrawAmount();
 
         stakeholders[msg.sender].uclaimedRewards += _calculateReward(
             msg.sender
@@ -116,14 +115,10 @@ contract Staking is IStaking, ReentrancyGuard {
         (, int256 price, , , ) = priceFeed.latestRoundData();
 
         if (stakeholders[msg.sender].uclaimedRewards > 0)
-            REWARD_TOKEN.transferFrom(
-                address(this),
-                msg.sender,
-                reward * uint256(price)
-            );
+            REWARD_TOKEN.safeTransfer(msg.sender, reward * uint256(price));
         stakeholders[msg.sender].uclaimedRewards = 0;
         stakeholders[msg.sender].lastUpdatedRewardTime = block.timestamp;
-        
+
         emit RewardClaimed(msg.sender, reward);
     }
 

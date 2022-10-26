@@ -29,6 +29,15 @@ interface IStaking {
     /// @param reward - number of tokens for reward
     event RewardClaimed(address indexed recipient, uint256 reward);
 
+    /// @notice Beneficiary or token address is zero.
+    error ZeroAddress();
+
+    /// @notice Ether amount is less than 5 ether
+    error LessThanValidAmount();
+
+    /// @notice Invalid withdraw amount
+    error InvalidWithdrawAmount();
+
     /// @notice staking ETH amount
     /// @dev every one can stake ETH to the staking pool
     function stake() external payable;

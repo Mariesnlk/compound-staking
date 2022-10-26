@@ -1,14 +1,14 @@
-require('@openzeppelin/test-helpers/configure')({
-  provider: 'http://localhost:8545',
-});
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { expect } from "chai";
 import { ethers } from "hardhat";
-import { Contract } from 'ethers'
-const { BigNumber } = require("ethers");
-const { constants } = require('@openzeppelin/test-helpers')
+import { Contract, constants } from 'ethers'
+import { time, takeSnapshot, SnapshotRestorer } from '@nomicfoundation/hardhat-network-helpers';
 
 describe("Staking", function () {
+  const ONE_DAY: number = 24 * 60 * 60;
+  const ONE_WEEK: number = 7 * 24 * 60 * 60;
+
+  const ether = ethers.utils.parseEther;
 
   let cEther: Contract
   let eRC20Dev: Contract
@@ -18,16 +18,15 @@ describe("Staking", function () {
   let owner: SignerWithAddress
   let stakeholder1: SignerWithAddress
   let stakeholder2: SignerWithAddress
-  let stakeholder3: SignerWithAddress
-  let stakeholder4: SignerWithAddress
   let otherAccounts: SignerWithAddress[]
 
-  const PRECISION = "000000000000000000";
-  let rewardsAmount: string = "1000".concat(PRECISION);
-  let amount: string = "1000".concat(PRECISION);
+  let snapshot: SnapshotRestorer
+
+  let rewardsAmount: string = "10000";
+  let stakedAmount: string = "5";
 
   before(async () => {
-    [owner, stakeholder1, stakeholder2, stakeholder3, stakeholder4, ...otherAccounts] = await ethers.getSigners();
+    [owner, stakeholder1, stakeholder2, ...otherAccounts] = await ethers.getSigners();
 
     const CEther = await ethers.getContractFactory('CEther');
     const ERC20Dev = await ethers.getContractFactory('ERC20Dev');
@@ -37,7 +36,7 @@ describe("Staking", function () {
     eRC20Dev = await ERC20Dev.deploy();
     aggregationV3 = await AggregationV3.deploy();
 
-    const staking = await Staking.deploy(
+    staking = await Staking.deploy(
       cEther.address,
       eRC20Dev.address,
       aggregationV3.address
@@ -46,6 +45,12 @@ describe("Staking", function () {
     const totalSupply = await eRC20Dev.totalSupply();
     await eRC20Dev.approve(staking.address, totalSupply);
 
+    snapshot = await takeSnapshot();
+
+  });
+
+  afterEach(async () => {
+    await snapshot.restore();
   });
 
   describe("Deployment", function () {
@@ -57,21 +62,63 @@ describe("Staking", function () {
 
     it("Should fail if cEther address is zero", async function () {
       const Staking = await ethers.getContractFactory('Staking');
-      await expect(Staking.deploy(constants.ZERO_ADDRESS, eRC20Dev.address, aggregationV3.address))
-        .to.be.revertedWith("ZERO_ADDRESS");
+      await expect(Staking.deploy(constants.AddressZero, eRC20Dev.address, aggregationV3.address))
+        .to.be.revertedWithCustomError(staking, "ZeroAddress");
     });
 
     it("Should fail if eRC20Dev address is zero", async function () {
       const Staking = await ethers.getContractFactory('Staking');
-      await expect(Staking.deploy( cEther.address, constants.ZERO_ADDRESS, aggregationV3.address))
-        .to.be.revertedWith("ZERO_ADDRESS");
+      await expect(Staking.deploy(cEther.address, constants.AddressZero, aggregationV3.address))
+        .to.be.revertedWithCustomError(staking, "ZeroAddress");
     });
 
     it("Should fail if aggregationV3 address is zero", async function () {
       const Staking = await ethers.getContractFactory('Staking');
-      await expect(Staking.deploy( cEther.address, eRC20Dev.address, constants.ZERO_ADDRESS))
-        .to.be.revertedWith("ZERO_ADDRESS");
+      await expect(Staking.deploy(cEther.address, eRC20Dev.address, constants.AddressZero))
+        .to.be.revertedWithCustomError(staking, "ZeroAddress");
+    });
+  });
+
+  describe("stake", function () {
+    it("Should fail if staked amount is less than 5 ETH", async function () {
+      await expect(staking.connect(stakeholder1).stake({ value: ether("1") }))
+        .to.be.revertedWithCustomError(staking, "LessThanValidAmount");
     });
 
+    it("Should staked for the first time", async function () {
+      let stakeholder = await staking.stakeholders(stakeholder1.address);
+      expect(stakeholder.stakedAmount).to.be.equal(0);
+
+      await staking.connect(stakeholder1).stake({ value: ether(stakedAmount) });
+
+      stakeholder = await staking.stakeholders(stakeholder1.address);
+      expect(stakeholder.stakedAmount).to.be.equal(ether(stakedAmount));
+    });
+
+    it("Should staked for the second time with calculation previous reward", async function () {
+      await staking.connect(stakeholder1).stake({ value: ether(stakedAmount) });
+      
+      await time.increase(10 * ONE_WEEK);
+
+    });
+
+    it("Should staked with two users", async function () {
+      await staking.connect(stakeholder1).stake({ value: ether(stakedAmount) });
+
+      await staking.connect(stakeholder2).stake({ value: ether(stakedAmount) });
+
+      const user1 = await staking.stakeholders(stakeholder1.address);
+      expect(user1.stakedAmount).to.be.equal(ether(stakedAmount));
+      const user2 = await staking.stakeholders(stakeholder2.address);
+      expect(user2.stakedAmount).to.be.equal(ether(stakedAmount));
+
+      expect(await staking.totalStakedAmount()).to.be.equal(ether("10"));
+    });
+
+    it("Should emit event correctly", async function () {
+      await expect(staking.connect(stakeholder1).stake({ value: ether(stakedAmount) }))
+        .to.emit(staking, "Staked")
+        .withArgs(stakeholder1.address, ether(stakedAmount));
+    });
   });
 });

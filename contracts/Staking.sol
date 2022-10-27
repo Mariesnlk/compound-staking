@@ -7,13 +7,16 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 import "./interfaces/IStaking.sol";
 import "./mock/interfaces/ICEther.sol";
+import "hardhat/console.sol";
 
 contract Staking is IStaking, ReentrancyGuard {
     using SafeERC20 for IERC20;
+
+    uint256 private constant PRECISION = 10_000;
     /// @notice constant of minimum ether amount to stake
     uint256 private constant MIN_AMOUNT_TO_STAKE = 5 ether;
     /// @notice constant one day in seconds
-    uint256 private constant DAY = 1 days;
+    uint256 private constant SECONDS = 1 seconds;
     /// @notice constant 365 days in seconds
     uint256 private constant YEAR = 365 days;
     /// @notice annual percantage rate
@@ -89,12 +92,13 @@ contract Staking is IStaking, ReentrancyGuard {
     /// @dev only stakers can withdraw
     /// @param amount - ETH amount to withdraw staked ETH
     function withdraw(uint256 amount) external override onlyStaker {
-        if (amount <= 0 && amount > stakeholders[msg.sender].stakedAmount)
+        if (amount <= 0 || amount > stakeholders[msg.sender].stakedAmount)
             revert InvalidWithdrawAmount();
 
         stakeholders[msg.sender].uclaimedRewards += _calculateReward(
             msg.sender
         );
+
         stakeholders[msg.sender].stakedAmount -= amount;
         stakeholders[msg.sender].lastUpdatedRewardTime = block.timestamp;
         totalStakedAmount -= amount;
@@ -128,9 +132,9 @@ contract Staking is IStaking, ReentrancyGuard {
         returns (uint256)
     {
         return
-            (((stakeholders[_account].stakedAmount * APR) / 100) / YEAR) *
+            (((APR / PRECISION) / YEAR) * stakeholders[_account].stakedAmount) *
             ((block.timestamp - stakeholders[_account].lastUpdatedRewardTime) /
-                DAY);
+                SECONDS);
     }
 
     receive() external payable {

@@ -5,7 +5,6 @@ import { Contract, constants } from 'ethers'
 import { time, takeSnapshot, SnapshotRestorer } from '@nomicfoundation/hardhat-network-helpers';
 
 describe("Staking", function () {
-  const ONE_DAY: number = 24 * 60 * 60;
   const ONE_WEEK: number = 7 * 24 * 60 * 60;
 
   const ether = ethers.utils.parseEther;
@@ -97,9 +96,12 @@ describe("Staking", function () {
 
     it("Should staked for the second time with calculation previous reward", async function () {
       await staking.connect(stakeholder1).stake({ value: ether(stakedAmount) });
-      
+
       await time.increase(10 * ONE_WEEK);
 
+      await staking.connect(stakeholder1).stake({ value: ether(stakedAmount) });
+
+      //check calculation
     });
 
     it("Should staked with two users", async function () {
@@ -119,6 +121,31 @@ describe("Staking", function () {
       await expect(staking.connect(stakeholder1).stake({ value: ether(stakedAmount) }))
         .to.emit(staking, "Staked")
         .withArgs(stakeholder1.address, ether(stakedAmount));
+    });
+  });
+
+  describe.only("withdraw", function () {
+    it("Should fail withdraw amount in ether is invalid (amount=0)", async function () {
+      await staking.connect(stakeholder1).stake({ value: ether(stakedAmount) });
+      await time.increase(10 * ONE_WEEK);
+
+      await expect(staking.connect(stakeholder1).withdraw(0))
+        .to.be.revertedWithCustomError(staking, "InvalidWithdrawAmount");
+    });
+
+    it("Should fail if user has not staked before", async function () {
+      await staking.connect(stakeholder1).stake({ value: ether(stakedAmount) });
+      await time.increase(10 * ONE_WEEK);
+
+      await expect(staking.connect(stakeholder1).withdraw(ether("10")))
+        .to.be.revertedWithCustomError(staking, "InvalidWithdrawAmount");
+    });
+
+    it.only("Should withdraw some ether", async function () {
+      await staking.connect(stakeholder1).stake({ value: ether(stakedAmount) });
+      await time.increase(10 * ONE_WEEK);
+
+      await staking.connect(stakeholder1).withdraw(ether("2"));
     });
   });
 });
